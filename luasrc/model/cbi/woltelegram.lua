@@ -1,5 +1,6 @@
 local sys = require "luci.sys"
 local util = require "luci.util"
+local dtypes = require "luci.cbi.datatypes"
 local Value = require "luci.cbi".Value
 local ListValue = require "luci.cbi".ListValue
 
@@ -273,7 +274,7 @@ pw.datatype = "uinteger"
 pw.default = "2"
 pw.rmempty = false
 
-d = m:section(TypedSection, "device", "Устройства", "Список ПК для бота: «Добавить» внизу — из DHCP или пустая строка, затем MAC и при необходимости IP. В Telegram — кнопки под панелью (inline: ⚡ WOL / 📊 статус по имени). «По умолч.» — для коротких /wol и /status. «Следить» — после WOL одно сообщение обновится по ping.")
+d = m:section(TypedSection, "device", "Устройства", "Список ПК для бота: «Добавить» внизу — из DHCP или пустая строка, затем MAC, колонка «Интерфейс для WOL» (пусто = br-lan), при необходимости IP для ping. В Telegram — кнопки под панелью (inline: ⚡ WOL / 📊 статус по имени). «По умолч.» — для коротких /wol и /status. «Следить» — после WOL одно сообщение обновится по ping.")
 d.addremove = true
 d.anonymous = true
 d.template = "cbi/tblsection"
@@ -310,7 +311,8 @@ mac.datatype = "macaddr"
 mac.rmempty = false
 
 iface = d:option(ListValue, "wol_iface", "Интерфейс для WOL")
-iface.optional = true
+-- В шаблоне cbi/tblsection (luci-compat) колонки с optional=true не выводятся в таблице вообще.
+iface.optional = false
 iface.rmempty = true
 iface:value("", "br-lan (по умолчанию)")
 do
@@ -331,7 +333,7 @@ iface.description = "Пусто — br-lan."
 
 ip = d:option(Value, "status_ip", "IP для ping")
 ip.datatype = "ipaddr"
-ip.optional = true
+ip.optional = false
 ip.rmempty = true
 ip.description = "Пинг для статуса. Пусто — из аренды DHCP по MAC. Пустое поле при сохранении не стирает уже заданный IP."
 function ip.write(self, section, value)
@@ -347,16 +349,36 @@ function ip.write(self, section, value)
 	return Value.write(self, section, value)
 end
 
+function ip.validate(self, value)
+	value = util.trim(value or "")
+	if value == "" then
+		return true
+	end
+	return dtypes.ipaddr(value)
+end
+
 watchf = d:option(Flag, "watch", "Следить")
 watchf.rmempty = false
 watchf.default = "0"
 watchf.description = "После WOL одно сообщение: сначала ожидание, затем ON/OFF по ping."
 
 wdelay = d:option(Value, "watch_delay", "Пауза (сек.)")
-wdelay.optional = true
+wdelay.optional = false
 wdelay.rmempty = true
 wdelay.datatype = "uinteger"
 wdelay.placeholder = "5"
 wdelay.description = "Пауза перед ping (сек.). Пусто — 5, макс. 120."
+
+function wdelay.validate(self, value)
+	value = util.trim(value or "")
+	if value == "" then
+		return true
+	end
+	local n = tonumber(value)
+	if not n or n < 1 or n > 120 then
+		return false
+	end
+	return true
+end
 
 return m
