@@ -6,7 +6,7 @@ cd "$ROOT"
 
 PKG=luci-app-wol-telegram
 VER=1.0
-REL=48
+REL=49
 ARCH=all
 
 WORKDIR=$(mktemp -d)
@@ -44,18 +44,24 @@ cp -f "$ROOT/root/etc/config/woltelegram" "$ST/etc/config/woltelegram"
 chmod 0600 "$ST/etc/config/woltelegram"
 
 mkdir -p "$WORKDIR/control"
+# Installed-Size в control для OpenWrt/opkg — в байтах (см. SDK: du -sb), не KiB из du -sk.
+INST_BYTES=$(du -sb "$ST" | awk '{print $1}')
 cat >"$WORKDIR/control/control" <<EOF
 Package: $PKG
 Version: $VER-$REL
 Depends: luci-base, etherwake, curl, python3-light
 Source: local
 SourceName: $PKG
+License: GPL-2.0-or-later
 Section: luci
+Priority: optional
 SourceDateEpoch: $(date +%s)
 Maintainer: local
 Architecture: $ARCH
-Installed-Size: $(du -sk "$ST" | awk '{print $1}')
-Description: LuCI + UCI Telegram WOL (/wol) and ping status (/status). Removed fully with opkg remove.
+Installed-Size: $INST_BYTES
+Description: LuCI Telegram: WOL и ping
+ LuCI + UCI + procd: бот Wake-on-LAN и статус по ping в Telegram.
+ pip на роутере: python-telegram-bot (см. README). Удаление: opkg remove.
 EOF
 
 cat >"$WORKDIR/control/postinst" <<'EOS'
@@ -104,3 +110,28 @@ rm -f "$OUT"
 echo "Собрано: $OUT"
 ls -la "$OUT"
 file "$OUT"
+
+# Индекс opkg: Size (байты .ipk) и Description — для LuCI/«менеджер пакетов» при src/gz на каталог с .ipk
+IPK_BASE=$(basename "$OUT")
+IPK_SIZE=$(wc -c <"$OUT")
+IPK_SHA=$(sha256sum "$OUT" | awk '{print $1}')
+{
+	echo "Package: $PKG"
+	echo "Version: $VER-$REL"
+	echo "Depends: luci-base, etherwake, curl, python3-light"
+	echo "License: GPL-2.0-or-later"
+	echo "Section: luci"
+	echo "Priority: optional"
+	echo "Source: local"
+	echo "SourceName: $PKG"
+	echo "Architecture: $ARCH"
+	echo "Installed-Size: $INST_BYTES"
+	echo "Filename: $IPK_BASE"
+	echo "Size: $IPK_SIZE"
+	echo "SHA256sum: $IPK_SHA"
+	echo "Description: LuCI Telegram: WOL и ping"
+	echo " LuCI + UCI + procd: бот Wake-on-LAN и статус по ping в Telegram."
+	echo " pip на роутере: python-telegram-bot (см. README)."
+} >"$ROOT/bin/Packages"
+gzip -9 -n -c "$ROOT/bin/Packages" >"$ROOT/bin/Packages.gz"
+echo "Индекс opkg: $ROOT/bin/Packages (+ .gz)"

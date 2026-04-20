@@ -1,4 +1,6 @@
 bin/*.ipk
+bin/Packages
+bin/Packages.gz
 __pycache__/
 *.pyc
 *.swp

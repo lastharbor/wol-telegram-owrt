@@ -50,10 +50,12 @@ curl -fsSL https://raw.githubusercontent.com/lastharbor/wol-telegram-owrt/v1.0.0
 
 ```sh
 ./build-ipk.sh
-# артефакт: bin/luci-app-wol-telegram_1.0-<PKG_RELEASE>_all.ipk
+# артефакты: bin/luci-app-wol-telegram_1.0-<PKG_RELEASE>_all.ipk, bin/Packages, bin/Packages.gz
 ```
 
 `PKG_RELEASE` задаётся в **`Makefile`**; для согласованности при релизе обновите и строку **`REL=`** в **`build-ipk.sh`** (или выровняйте скриптом перед тегом).
+
+**LuCI / opkg: размер и описание** устанавливаемого с диска `.ipk` часто не показываются: в индексе репозитория нет полей `Size` и `Description`. Скрипт кладёт в **`bin/Packages`** и **`bin/Packages.gz`** одну запись на собранный пакет. Положите в один каталог `.ipk` + `Packages` (+ `.gz`), добавьте в **`/etc/opkg/customfeeds.conf`** строку вида `src/gz woltg file:///www/woltg` (путь к каталогу), выполните **`opkg update`** — в списке пакетов появятся размер и описание.
 
 Установка на роутере:
 
@@ -76,7 +78,7 @@ opkg remove luci-app-wol-telegram
 | Workflow | Когда | Что делает |
 |----------|--------|------------|
 | **build** | push / PR в `main` | Сборка `.ipk`, артефакт в Actions |
-| **release** | push тега `v*` (например `v1.0.0`) | Сборка `.ipk` и **GitHub Release** с прикреплённым пакетом |
+| **release** | push тега `v*` (например `v1.0.0`) | Сборка `.ipk`, **`Packages` / `Packages.gz`** и **GitHub Release** с этими файлами |
 
 Создать **Release V1** после первого залива кода:
 

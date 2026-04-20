@@ -25,4 +25,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: luci-app-wol-telegram-ipk
-          path: bin/luci-app-wol-telegram_*_all.ipk
+          path: |
+            bin/luci-app-wol-telegram_*_all.ipk
+            bin/Packages
+            bin/Packages.gz

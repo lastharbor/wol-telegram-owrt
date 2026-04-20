@@ -23,5 +23,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: bin/luci-app-wol-telegram_*_all.ipk
+          files: |
+            bin/luci-app-wol-telegram_*_all.ipk
+            bin/Packages
+            bin/Packages.gz
           generate_release_notes: true
