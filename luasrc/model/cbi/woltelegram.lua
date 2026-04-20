@@ -274,13 +274,12 @@ pw.datatype = "uinteger"
 pw.default = "2"
 pw.rmempty = false
 
-d = m:section(TypedSection, "device", "Устройства", "Добавление: DHCP или пустая строка. WOL: несколько интерфейсов (Ctrl/Shift в списке). Не выбрано — br-lan. «По умолч.» — /wol и /status без суффикса.")
+-- Не tblsection: MultiValue в JS — это ui.Dropdown (мультивыбор); в узкой ячейке таблицы
+-- не инициализируется и показывается как сырой текст. tsection — полная ширина поля (как dnsmasq).
+d = m:section(TypedSection, "device", "Устройства", "Каждое устройство — отдельный блок. WOL: выпадающий список, несколько интерфейсов. Пусто — br-lan. «По умолч.» — /wol и /status без суффикса.")
 d.addremove = true
 d.anonymous = true
-d.template = "cbi/tblsection"
-d.sortable = true
 
--- Первым столбцом — имя строки в таблице LuCI (tblsection); иначе «имя» не видно в списке.
 lab = d:option(Value, "label", "Имя в ответах")
 lab.placeholder = "AntonPC"
 lab.rmempty = true
@@ -313,7 +312,6 @@ mac.rmempty = false
 iface = d:option(MultiValue, "wol_iface", "WOL: интерфейсы")
 iface.optional = false
 iface.rmempty = true
-iface.widget = "select"
 iface.size = 5
 do
 	local seen = {}
@@ -340,7 +338,7 @@ do
 		end
 	end)
 end
-iface.description = "Мультивыбор. Пусто — только br-lan в боте."
+iface.description = "Несколько значений из списка. Пусто — только br-lan в боте."
 
 function iface.cfgvalue(self, section)
 	local uci = self.map.uci
