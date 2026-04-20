@@ -43,6 +43,26 @@ if [ -z "$URL" ] || [ -z "$NAME" ]; then
 	exit 1
 fi
 
+# Версия из имени артефакта: luci-app-wol-telegram_1.0.0-1_all.ipk → 1.0.0-1
+NEW_VER=""
+case "$NAME" in
+	luci-app-wol-telegram_*_all.ipk)
+		NEW_VER="${NAME#luci-app-wol-telegram_}"
+		NEW_VER="${NEW_VER%_all.ipk}"
+		;;
+esac
+
+INSTALLED_VER=""
+if command -v opkg >/dev/null 2>&1; then
+	INSTALLED_VER="$(opkg list-installed luci-app-wol-telegram 2>/dev/null | awk '{print $3}')"
+fi
+
+if [ -n "$INSTALLED_VER" ] && [ -n "$NEW_VER" ] && [ "$INSTALLED_VER" = "$NEW_VER" ] && [ -z "${FORCE}${WOLTG_FORCE_REINSTALL}" ]; then
+	echo "Уже установлена та же версия: $INSTALLED_VER (релиз $TAG). Скачивание и opkg пропущены."
+	echo "Переустановка: FORCE=1 curl … | sh -s $TAG   или   WOLTG_FORCE_REINSTALL=1 sh … $TAG"
+	exit 0
+fi
+
 IPK="/tmp/$NAME"
 echo "Скачиваю $NAME …"
 curl -fL --connect-timeout 30 --max-time 300 "$URL" -o "$IPK"
