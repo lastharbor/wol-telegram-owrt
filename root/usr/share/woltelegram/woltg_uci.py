@@ -7,6 +7,34 @@ import subprocess
 from typing import List, Optional
 
 
+def uci_get_list(config: str, section: str, option: str) -> List[str]:
+    """Все значения list-опции или одно option (обратная совместимость)."""
+    prefix = f"{config}.{section}.{option}="
+    try:
+        out = subprocess.check_output(
+            ["uci", "-q", "show", f"{config}.{section}"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=15,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        out = ""
+    vals: List[str] = []
+    for line in out.splitlines():
+        line = line.strip()
+        if not line.startswith(prefix):
+            continue
+        rhs = line[len(prefix) :].strip()
+        for m in re.finditer(r"'((?:[^'\\]|\\.)*)'", rhs):
+            vals.append(m.group(1).replace("\\'", "'"))
+    if vals:
+        return vals
+    one = uci_get(config, section, option)
+    if not one:
+        return []
+    return [p for p in re.split(r"[\s,]+", one.strip()) if p]
+
+
 def uci_get(config: str, section: str, option: str) -> Optional[str]:
     try:
         out = subprocess.check_output(

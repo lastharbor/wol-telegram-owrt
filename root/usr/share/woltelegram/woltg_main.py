@@ -43,7 +43,7 @@ from woltg_devices import (
     apply_device,
     btn_label,
     device_enabled,
-    etherwake,
+    etherwake_all,
     find_section_by_status_cmd,
     find_section_by_wol_cmd,
     get_cmd_status,
@@ -512,8 +512,9 @@ async def do_wol_for_chat(bot, chat_id: int, sid: str, cfg: dict) -> None:
         return
     dash_autorefresh_set(chat_id, False)
     clear = InlineKeyboardMarkup([])
-    head = f"⚡ WOL: пакет → {dev.label} ({dev.mac}), {dev.iface}"
-    ok, err = etherwake(dev.iface, dev.mac)
+    ifn = ", ".join(dev.ifaces) if dev.ifaces else "br-lan"
+    head = f"⚡ WOL: пакет → {dev.label} ({dev.mac}), {ifn}"
+    ok, err = etherwake_all(dev.ifaces, dev.mac)
     if not ok:
         full = f"⚠ WOL: ошибка etherwake. {err}\n\n{dashboard_build_text(cfg)}"
         await _edit_or_log(bot, chat_id, mid, full, inline_markup=clear)

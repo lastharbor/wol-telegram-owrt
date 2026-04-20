@@ -160,12 +160,14 @@ function action_dhcpadd()
 						is_default = defv,
 						wol_mac = mac,
 						status_ip = ip,
-						wol_iface = "br-lan",
 						cmd_wol = w,
 						cmd_status = s_str,
 						label = lab,
 						watch = "0",
 					})
+					if ok_t then
+						uci:set_list("woltelegram", sid, "wol_iface", { "br-lan" })
+					end
 					if ok_t and uci:commit("woltelegram") then
 						ok_add = true
 					end

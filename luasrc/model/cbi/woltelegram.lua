@@ -3,6 +3,7 @@ local util = require "luci.util"
 local dtypes = require "luci.cbi.datatypes"
 local Value = require "luci.cbi".Value
 local ListValue = require "luci.cbi".ListValue
+local MultiValue = require "luci.cbi".MultiValue
 
 local function netdev_names()
 	local t, seen = {}, {}
@@ -37,7 +38,7 @@ m = Map(
 		"#woltg-out-logread{max-height:min(55vh,22rem);min-height:6rem;margin:0 0 .5rem;}",
 		"#woltg-out-logfile{max-height:min(55vh,22rem);min-height:4rem;margin:0 0 .4rem;}",
 		"</style>",
-		'<p class="hint" style="margin:0 0 .35rem">«Показать чаты» в LuCI не запускается, пока бот на роутере в procd в состоянии running — иначе конфликт getUpdates.</p>',
+		'<p class="hint" style="margin:0 0 .35rem">«Показать чаты» — только при остановленном боте (конфликт getUpdates).</p>',
 		'<p style="margin:.35rem 0 .2rem;font-weight:600">logread -e woltelegram</p>',
 		'<pre id="woltg-out-logread" class="woltg-log-pre"></pre>',
 		'<p style="margin:.35rem 0 .2rem;font-weight:600">/var/log/woltelegram.log</p>',
@@ -45,7 +46,7 @@ m = Map(
 		'<p class="cbi-button-row" style="margin:0"><button type="button" class="btn cbi-button" id="woltg-log-refresh">Обновить журнал</button></p>',
 		"</div>",
 		'<div id="woltg-intro">',
-		"Здесь в LuCI: включение бота, токен, чаты и таблица устройств (в т.ч. из DHCP). В Telegram только статус (ping) и разбужка (WOL) по уже добавленным строкам — без добавления или удаления ПК из чата. Обработчик: Python (<code>python-telegram-bot</code>, модули <code>/usr/share/woltelegram/</code>, запуск <code>/usr/bin/woltelegram</code>); на роутере: <code>pip3 install 'python-telegram-bot>=21,&lt;23'</code>. Дописать chat_id из getUpdates вручную: <code>woltelegram sync-chatids</code>.",
+		"Токен, чаты, устройства. В Telegram — WOL и ping по таблице. На роутере: <code>pip3 install 'python-telegram-bot>=21,&lt;23'</code>. Chat_id: <code>woltelegram sync-chatids</code>.",
 		"</div></div>",
 		'<script type="text/javascript">//<![CDATA[\n',
 		"(function(){var G='",
@@ -64,7 +65,7 @@ m = Map(
 		"else{if(intro)intro.style.display='';woltgSetMapBodyVisible(true);if(logV)logV.style.display='none';if(bLog)bLog.className='btn cbi-button';if(bSet)bSet.className='btn cbi-button cbi-button-apply';}}",
 		"function woltgLoadLogs(){var lr=document.getElementById('woltg-out-logread');var lf=document.getElementById('woltg-out-logfile');if(lr)lr.textContent='Загрузка…';if(lf)lf.textContent='…';",
 		"fetch(L,{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}}).then(function(r){return r.json();}).then(function(j){",
-		"if(j&&j.ok){if(lr)lr.textContent=j.logread||'';if(lf)lf.textContent=j.logfile||((j.logfile_empty)?'(файла ещё нет — запустите бота после сохранения конфига.)':'');}",
+		"if(j&&j.ok){if(lr)lr.textContent=j.logread||'';if(lf)lf.textContent=j.logfile||((j.logfile_empty)?'(нет файла — запустите бота.)':'');}",
 		"else{if(lr)lr.textContent='Нет ответа';if(lf)lf.textContent='';}}).catch(function(e){if(lr)lr.textContent=String(e);if(lf)lf.textContent='';});}",
 		"function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\\\"/g,'&quot;');}",
 		"function overlay(){var o=document.getElementById('modal_overlay');if(!o){o=document.createElement('div');o.id='modal_overlay';document.body.appendChild(o);}return o;}",
@@ -104,7 +105,7 @@ m = Map(
 		"'<div class=\"cbi-button-row\" style=\"display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem\">'+",
 		"'<button type=\"button\" class=\"btn cbi-button cbi-button-add\" id=\"woltg-dev-dhcpgo\">Из DHCP</button>'+",
 		"'<button type=\"button\" class=\"btn cbi-button\" id=\"woltg-dev-manual\">Пустая строка</button></div>'+",
-		"'<p class=\"hint\" style=\"margin:0;font-size:92%\">Пустая строка — вручную MAC (и при необходимости IP), затем «Сохранить».</p></div>'+",
+		"'<p class=\"hint\" style=\"margin:0;font-size:92%\">Пустая строка — вручную MAC/IP, затем «Сохранить».</p></div>'+",
 		"'<div id=\"woltg-dev-pane2\" style=\"display:none\"></div>'+",
 		"'<div class=\"button-row\" style=\"margin-top:1rem\"><button type=\"button\" class=\"btn cbi-button\" id=\"woltg-dev-cancel\">Закрыть</button>'+",
 		"'<button type=\"button\" class=\"btn cbi-button cbi-button-apply\" id=\"woltg-dev-ok\" style=\"display:none\">Добавить</button></div></div>';",
@@ -143,14 +144,14 @@ end
 
 s = m:section(NamedSection, "main", "settings", "Параметры бота")
 s.addremove = false
-s.description = "Включение бота, токен и доступ по chat_id. Сами ПК задаются в разделе «Устройства» ниже."
+s.description = "Токен, чаты. ПК — в «Устройства»."
 
 en = s:option(Flag, "enabled", "Включить бота")
 en.rmempty = false
 
 svc = s:option(DummyValue, "_handler_status", "Обработчик (procd)")
 svc.rawhtml = true
-svc.description = "Процесс long-poll и доступ к api.telegram.org с роутера (не гарантия, что бот в сети)."
+svc.description = "procd и проверка api.telegram.org."
 function svc.cfgvalue(self, section)
 	local running = (sys.call("/etc/init.d/woltelegram running >/dev/null 2>&1") == 0)
 	local curl = util.exec("curl -sS -m 4 -o /dev/null -w '%{http_code}' https://api.telegram.org 2>/dev/null") or ""
@@ -160,15 +161,15 @@ function svc.cfgvalue(self, section)
 	if running then
 		line = '<span class="label success">запущен</span>'
 	else
-		line = '<span class="label warning">остановлен</span> — включите «Включить бота», сохраните форму; лог: <code>logread -e woltelegram</code>'
+		line = '<span class="label warning">остановлен</span> — включите бота, сохраните; <code>logread -e woltelegram</code>'
 	end
 	if running then
 		if api_ok then
-			line = line .. ' · до <code>api.telegram.org</code> отвечает (HTTP ' .. code .. ')'
+			line = line .. ' · Telegram HTTP ' .. code
 		elseif code ~= "" then
-			line = line .. ' · HTTP до Telegram: <code>' .. code .. '</code> (проверьте DNS/фаервол)'
+			line = line .. ' · Telegram HTTP <code>' .. code .. '</code>'
 		else
-			line = line .. ' · <span class="hint">curl не вернул код — пакет curl?</span>'
+			line = line .. ' · <span class="hint">curl?</span>'
 		end
 	end
 	return '<div class="cbi-value-description" style="margin:.2rem 0 .5rem">' .. line .. "</div>"
@@ -177,13 +178,12 @@ end
 rm = s:option(Flag, "reply_menu", "Клавиатура в Telegram")
 rm.rmempty = false
 rm.default = "1"
-rm.description = "В чате: одна обновляемая панель и кнопки под ней (inline: WOL/статус по имени). Старая нижняя reply-клавиатура при /start снимается. ПК — только в LuCI."
+rm.description = "Панель + inline-кнопки; reply-клавиатура снимается при /start."
 
 lmp = s:option(ListValue, "log_max_preset", "Размер файла журнала")
 lmp.rmempty = false
 lmp.default = "256"
-lmp.description =
-	"Лимит для <code>/var/log/woltelegram.log</code>: при превышении файл ротируется (старый сжимается в <code>.1</code>, затем удаляется при следующей ротации). После «Сохранить» перезапускается procd."
+lmp.description = "Лимит <code>/var/log/woltelegram.log</code>, ротация; после сохранения — перезапуск procd."
 lmp:value("64", "64 KiB")
 lmp:value("128", "128 KiB")
 lmp:value("256", "256 KiB")
@@ -197,7 +197,7 @@ lmp:value("custom", "Другое…")
 lmk = s:option(Value, "log_max_kb", "Свой лимит (KiB)")
 lmk.datatype = "and(uinteger,range(16,1048576))"
 lmk.placeholder = "256"
-lmk.description = "Только если выбрано «Другое…». Диапазон 16–1048576 KiB (до ~1 GiB)."
+lmk.description = "Если «Другое…»: 16–1048576 KiB."
 lmk:depends("log_max_preset", "custom")
 
 tok = s:option(Value, "bot_token", "Токен Telegram-бота")
@@ -206,14 +206,14 @@ tok.rmempty = false
 
 xhrui = s:option(DummyValue, "_xhr_chatids", "Чаты")
 xhrui.rawhtml = true
-xhrui.description = "«Показать чаты» ждёт до ~45 с: за это время напишите боту — появится chat_id. Пока на роутере запущен сам бот (procd), кнопка заблокирована: иначе два getUpdates по одному токену и /start не доходит до Python."
+xhrui.description = "Показать чаты — до ~45 с, бот должен быть остановлен."
 function xhrui.cfgvalue(self, section)
 	local dsp = require "luci.dispatcher"
 	local url = dsp.build_url("admin", "services", "woltelegram", "xhr")
 	local ujs = url:gsub("\\", "\\\\"):gsub("'", "\\'")
 	return table.concat({
 		'<div class="cbi-value" id="woltg-xhr-wrap">',
-		'<p class="hint" style="margin:0 0 .55rem">Сначала остановите бота на роутере, если он включён. Затем «Показать чаты» и в течение ожидания напишите боту в Telegram (любой текст или /start).</p>',
+		'<p class="hint" style="margin:0 0 .55rem">Остановите бота, затем «Показать чаты» и напишите боту.</p>',
 		'<div class="cbi-button-row" style="display:flex;flex-wrap:wrap;gap:.5rem;margin:.2rem 0 .6rem">',
 		'<button type="button" class="btn cbi-button cbi-button-apply" id="woltg-merge">В UCI из Telegram</button>',
 		'<button type="button" class="btn cbi-button cbi-button-reset" id="woltg-preview">Показать чаты</button>',
@@ -261,7 +261,7 @@ function xhrui.cfgvalue(self, section)
 end
 
 ch = s:option(Value, "allowed_chat_ids", "Разрешённые chat_id")
-ch.description = "Через запятую. «В список» дописывает id; сохраните форму. «Показать чаты» доступно только пока бот на роутере остановлен (иначе конфликт getUpdates)."
+ch.description = "Через запятую. «В список» — дописать id и сохранить."
 ch.rmempty = false
 
 pc = s:option(Value, "ping_count", "Число ping-запросов")
@@ -274,7 +274,7 @@ pw.datatype = "uinteger"
 pw.default = "2"
 pw.rmempty = false
 
-d = m:section(TypedSection, "device", "Устройства", "Список ПК для бота: «Добавить» внизу — из DHCP или пустая строка, затем MAC, колонка «Интерфейс для WOL» (пусто = br-lan), при необходимости IP для ping. В Telegram — кнопки под панелью (inline: ⚡ WOL / 📊 статус по имени). «По умолч.» — для коротких /wol и /status. «Следить» — после WOL одно сообщение обновится по ping.")
+d = m:section(TypedSection, "device", "Устройства", "Добавление: DHCP или пустая строка. WOL: несколько интерфейсов (Ctrl/Shift в списке). Не выбрано — br-lan. «По умолч.» — /wol и /status без суффикса.")
 d.addremove = true
 d.anonymous = true
 d.template = "cbi/tblsection"
@@ -288,7 +288,7 @@ lab.rmempty = true
 de = d:option(Flag, "enabled", "В боте")
 de.rmempty = false
 de.default = "1"
-de.description = "Включено: строка в панели и в клавиатуре WOL/статус. Выключено: только в LuCI, в боте скрыто."
+de.description = "В боте: показать/скрыть строку."
 
 def = d:option(Flag, "is_default", "По умолч.")
 def.rmempty = true
@@ -310,32 +310,77 @@ mac.placeholder = "60:cf:84:dd:7e:1b"
 mac.datatype = "macaddr"
 mac.rmempty = false
 
-iface = d:option(ListValue, "wol_iface", "Интерфейс для WOL")
--- В шаблоне cbi/tblsection (luci-compat) колонки с optional=true не выводятся в таблице вообще.
+iface = d:option(MultiValue, "wol_iface", "WOL: интерфейсы")
 iface.optional = false
 iface.rmempty = true
-iface:value("", "br-lan (по умолчанию)")
+iface.widget = "select"
+iface.size = 5
 do
 	local seen = {}
+	iface:value("br-lan", "br-lan")
+	seen["br-lan"] = true
 	for _, dev in ipairs(netdev_names()) do
-		iface:value(dev, dev)
-		seen[dev] = true
+		if not seen[dev] then
+			iface:value(dev, dev)
+			seen[dev] = true
+		end
 	end
 	m.uci:foreach("woltelegram", "device", function(s)
 		local cur = s.wol_iface
-		if type(cur) == "string" and cur ~= "" and not seen[cur] then
-			iface:value(cur, cur .. " (нет в /sys/class/net)")
+		if type(cur) == "table" then
+			for _, c in ipairs(cur) do
+				if type(c) == "string" and c ~= "" and not seen[c] then
+					iface:value(c, c .. " *")
+					seen[c] = true
+				end
+			end
+		elseif type(cur) == "string" and cur ~= "" and not seen[cur] then
+			iface:value(cur, cur .. " *")
 			seen[cur] = true
 		end
 	end)
 end
-iface.description = "Пусто — br-lan."
+iface.description = "Мультивыбор. Пусто — только br-lan в боте."
+
+function iface.cfgvalue(self, section)
+	local uci = self.map.uci
+	local lst = uci:get_list("woltelegram", section, "wol_iface")
+	if type(lst) == "table" and #lst > 0 then
+		return table.concat(lst, self.delimiter or " ")
+	end
+	local s = uci:get("woltelegram", section, "wol_iface")
+	if type(s) == "string" and s ~= "" then
+		return s
+	end
+	return nil
+end
+
+function iface.write(self, section, value)
+	local uci = self.map.uci
+	local t = {}
+	if type(value) == "table" then
+		for _, x in ipairs(value) do
+			if type(x) == "string" and x ~= "" then
+				t[#t + 1] = x
+			end
+		end
+	elseif type(value) == "string" and value ~= "" then
+		for x in value:gmatch("%S+") do
+			t[#t + 1] = x
+		end
+	end
+	if #t == 0 then
+		uci:delete("woltelegram", section, "wol_iface")
+		return true
+	end
+	return uci:set_list("woltelegram", section, "wol_iface", t)
+end
 
 ip = d:option(Value, "status_ip", "IP для ping")
 ip.datatype = "ipaddr"
 ip.optional = false
 ip.rmempty = true
-ip.description = "Пинг для статуса. Пусто — из аренды DHCP по MAC. Пустое поле при сохранении не стирает уже заданный IP."
+ip.description = "Ping статуса; пусто — DHCP по MAC."
 function ip.write(self, section, value)
 	value = util.trim(value or "")
 	if value ~= "" then
@@ -360,14 +405,14 @@ end
 watchf = d:option(Flag, "watch", "Следить")
 watchf.rmempty = false
 watchf.default = "0"
-watchf.description = "После WOL одно сообщение: сначала ожидание, затем ON/OFF по ping."
+watchf.description = "После WOL — одно сообщение по ping."
 
 wdelay = d:option(Value, "watch_delay", "Пауза (сек.)")
 wdelay.optional = false
 wdelay.rmempty = true
 wdelay.datatype = "uinteger"
 wdelay.placeholder = "5"
-wdelay.description = "Пауза перед ping (сек.). Пусто — 5, макс. 120."
+wdelay.description = "Сек. до ping; пусто — 5; макс. 120."
 
 function wdelay.validate(self, value)
 	value = util.trim(value or "")

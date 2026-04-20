@@ -122,7 +122,7 @@ chmod +x manual-install.sh
 
 | Действие | Протокол / порт | Примечание |
 |----------|-----------------|------------|
-| **Разбудить ПК (WOL)** | **Ethernet magic packet** (L2), вызов **`etherwake`** с `-i` и MAC из UCI | В `woltg_devices.py` для WoL **не используются TCP/UDP-порты**: пакет уходит на канальный интерфейс (например `br-lan`). Отличие от утилит «WoL через IP», которые часто шлют **UDP broadcast на порт 7 или 9**: такого режима в пакете нет. |
+| **Разбудить ПК (WOL)** | L2 magic packet, **`etherwake`** по каждому `wol_iface` из списка UCI | TCP/UDP для WoL не задаётся. UDP 7/9 («WoL через IP») не используется. |
 | **Статус `/status` (ping)** | **ICMP** (echo request), без TCP/UDP-портов | Зависит от `ping`/`busybox ping` на роутере. |
 | **Telegram-бот** | **HTTPS, TCP 443** (исходящий) к хостам API Telegram | Нужен выход в интернет с роутера; входящих портов для long poll не требуется. |
 

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from woltg_uci import uci_get, uci_sections_device
+from woltg_uci import uci_get, uci_get_list, uci_sections_device
 
 _RE_MAC_COLON = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 _RE_IFACE = re.compile(r"^[a-zA-Z0-9._-]{1,31}$")
@@ -83,7 +83,7 @@ class DeviceRuntime:
     sid: str
     label: str
     mac: str
-    iface: str
+    ifaces: List[str]
     status_ip: Optional[str]
     watch: bool
     watch_delay: int
@@ -95,7 +95,13 @@ def apply_device(sid: str) -> Optional[DeviceRuntime]:
     if not mac:
         return None
     mac = mac.lower()
-    iface = (uci_get("woltelegram", sid, "wol_iface") or "").strip() or "br-lan"
+    ifaces: List[str] = []
+    for raw in uci_get_list("woltelegram", sid, "wol_iface"):
+        t = (raw or "").strip()
+        if t and _RE_IFACE.match(t) and t not in ifaces:
+            ifaces.append(t)
+    if not ifaces:
+        ifaces = ["br-lan"]
     sip = (uci_get("woltelegram", sid, "status_ip") or "").strip() or None
     if not sip:
         sip = dhcp_ip_for_mac(mac)
@@ -111,7 +117,7 @@ def apply_device(sid: str) -> Optional[DeviceRuntime]:
         sid=sid,
         label=label,
         mac=mac,
-        iface=iface,
+        ifaces=ifaces,
         status_ip=sip,
         watch=w,
         watch_delay=wd,
@@ -157,6 +163,27 @@ def etherwake(iface: str, mac: str) -> Tuple[bool, str]:
         return r.returncode == 0, err
     except (OSError, subprocess.TimeoutExpired) as e:
         return False, str(e)[:400]
+
+
+def etherwake_all(ifaces: List[str], mac: str) -> Tuple[bool, str]:
+    """Magic packet на каждом интерфейсе; успех, если хотя бы один etherwake завершился с кодом 0."""
+    if not ifaces:
+        ifaces = ["br-lan"]
+    errs: List[str] = []
+    any_ok = False
+    for iface in ifaces:
+        ok, err = etherwake(iface, mac)
+        if ok:
+            any_ok = True
+        else:
+            e = (err or "").strip()
+            if e:
+                errs.append(f"{iface}: {e}")
+            else:
+                errs.append(f"{iface}: etherwake rc≠0")
+    if any_ok:
+        return True, "; ".join(errs) if errs else ""
+    return False, "; ".join(errs) if errs else "etherwake: все интерфейсы вернули ошибку"
 
 
 def resolve_default_section() -> Tuple[Optional[str], int]:
