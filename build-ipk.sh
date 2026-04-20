@@ -6,7 +6,7 @@ cd "$ROOT"
 
 PKG=luci-app-wol-telegram
 VER=1.0
-REL=51
+REL=52
 ARCH=all
 
 WORKDIR=$(mktemp -d)

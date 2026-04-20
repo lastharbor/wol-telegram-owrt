@@ -3,7 +3,7 @@ local util = require "luci.util"
 local dtypes = require "luci.cbi.datatypes"
 local Value = require "luci.cbi".Value
 local ListValue = require "luci.cbi".ListValue
-local MultiValue = require "luci.cbi".MultiValue
+local DynamicList = require "luci.cbi".DynamicList
 
 local function netdev_names()
 	local t, seen = {}, {}
@@ -39,11 +39,13 @@ m = Map(
 		"#woltg-out-logfile{max-height:min(55vh,22rem);min-height:4rem;margin:0 0 .4rem;}",
 		"#cbi-woltelegram-device{margin-top:.35rem;}",
 		"#cbi-woltelegram-device>.cbi-map-descr,#cbi-woltelegram-device .cbi-map-descr{margin:0 0 1.1rem;line-height:1.5;max-width:56rem;padding:.2rem 0 .1rem;}",
-		"#cbi-woltelegram-device fieldset.cbi-section,#cbi-woltelegram-device .cbi-section-node,#cbi-woltelegram-device>div[id^='cbi-woltelegram-']:not(#cbi-woltelegram-device){margin:0 0 1rem;padding:.85rem 1rem 1rem;border:1px solid var(--border-color-medium,rgba(128,128,128,.38));border-radius:8px;background:var(--background-color-high,rgba(128,128,128,.06));box-sizing:border-box;}",
-		"#cbi-woltelegram-device .cbi-value{display:flex;flex-wrap:wrap;align-items:flex-start;column-gap:1rem;row-gap:.35rem;padding:.5rem 0;border-top:1px solid rgba(128,128,128,.18);}",
-		"#cbi-woltelegram-device .cbi-value:first-of-type{border-top:0;padding-top:.15rem;}",
-		"#cbi-woltelegram-device .cbi-value-title{flex:0 1 11rem;margin:0;padding:.2rem 0 0;max-width:100%;}",
-		"#cbi-woltelegram-device .cbi-value-field{flex:1 1 14rem;min-width:0;max-width:100%;}",
+		"#cbi-woltelegram-device fieldset.cbi-section,#cbi-woltelegram-device .cbi-section-node,#cbi-woltelegram-device>div[id^='cbi-woltelegram-']:not(#cbi-woltelegram-device){margin:0 0 1.15rem;padding:1rem 1.15rem 1.1rem;border:1px solid var(--border-color-medium,rgba(128,128,128,.38));border-radius:8px;background:var(--background-color-high,rgba(128,128,128,.06));box-sizing:border-box;}",
+		"#cbi-woltelegram-device .cbi-section-node .cbi-value,#cbi-woltelegram-device fieldset .cbi-value{padding-left:.15rem;padding-right:.15rem;}",
+		"#cbi-woltelegram-device .cbi-value{display:flex;flex-wrap:wrap;align-items:flex-start;column-gap:1rem;row-gap:.45rem;padding:.55rem 0;border-top:1px solid rgba(128,128,128,.18);}",
+		"#cbi-woltelegram-device .cbi-value:first-of-type{border-top:0;padding-top:.25rem;}",
+		"#cbi-woltelegram-device .cbi-value-title{flex:0 1 11rem;margin:0;padding:.25rem 0 0;max-width:100%;}",
+		"#cbi-woltelegram-device .cbi-value-field{flex:1 1 14rem;min-width:0;max-width:100%;padding:.15rem 0;}",
+		"#cbi-woltelegram-device .cbi-dynlist,#cbi-woltelegram-device ul.cbi-dynlist{margin:.15rem 0 .35rem;}",
 		"#cbi-woltelegram-device .cbi-section-create,#cbi-woltelegram-device .cbi-section-actions{margin:.85rem 0 .35rem;}",
 		"</style>",
 		'<p class="hint" style="margin:0 0 .35rem">«Показать чаты» — только при остановленном боте (конфликт getUpdates).</p>',
@@ -282,9 +284,8 @@ pw.datatype = "uinteger"
 pw.default = "2"
 pw.rmempty = false
 
--- Не tblsection: MultiValue в JS — это ui.Dropdown (мультивыбор); в узкой ячейке таблицы
--- не инициализируется и показывается как сырой текст. tsection — полная ширина поля (как dnsmasq).
-d = m:section(TypedSection, "device", "Устройства", "Каждое устройство — отдельный блок. WOL: выпадающий список, несколько интерфейсов. Пусто — br-lan. «По умолч.» — /wol и /status без суффикса.")
+-- Не tblsection: в JS MultiValue (ui.Dropdown) на этой сборке не монтировался. tsection + DynamicList (ui.DynamicList).
+d = m:section(TypedSection, "device", "Устройства", "Каждое устройство — отдельный блок. WOL: список интерфейсов (поле «+», выбор из выпадающего списка). Пусто — br-lan. «По умолч.» — /wol и /status без суффикса.")
 d.addremove = true
 d.anonymous = true
 
@@ -317,10 +318,11 @@ mac.placeholder = "60:cf:84:dd:7e:1b"
 mac.datatype = "macaddr"
 mac.rmempty = false
 
-iface = d:option(MultiValue, "wol_iface", "WOL: интерфейсы")
+-- MultiValue → ui.Dropdown в JS часто не монтируется (остаётся текст). DynamicList → ui.DynamicList: выбор из списка и «+».
+iface = d:option(DynamicList, "wol_iface", "WOL: интерфейсы")
 iface.optional = false
 iface.rmempty = true
-iface.size = 5
+iface.placeholder = "br-lan"
 do
 	local seen = {}
 	iface:value("br-lan", "br-lan")
@@ -346,19 +348,29 @@ do
 		end
 	end)
 end
-iface.description = "Несколько значений из списка. Пусто — только br-lan в боте."
+iface.description = "Добавьте строки из списка (кнопка «+»). Пусто — в боте только br-lan."
 
 function iface.cfgvalue(self, section)
 	local uci = self.map.uci
+	local out = {}
 	local lst = uci:get_list("woltelegram", section, "wol_iface")
-	if type(lst) == "table" and #lst > 0 then
-		return table.concat(lst, self.delimiter or " ")
+	if type(lst) == "table" then
+		for _, c in ipairs(lst) do
+			if type(c) == "string" and c ~= "" then
+				out[#out + 1] = c
+			end
+		end
+	end
+	if #out > 0 then
+		return out
 	end
 	local s = uci:get("woltelegram", section, "wol_iface")
-	if type(s) == "string" and s ~= "" then
-		return s
+	if type(s) == "string" and s:match("%S") then
+		for x in s:gmatch("%S+") do
+			out[#out + 1] = x
+		end
 	end
-	return nil
+	return (#out > 0) and out or nil
 end
 
 function iface.write(self, section, value)
