@@ -76,7 +76,13 @@ local function dhcp_leases_list()
 			if host == "*" then
 				host = ""
 			end
-			out[#out + 1] = { key = mac .. "|" .. ip .. "|" .. host, disp = disp }
+			out[#out + 1] = {
+				key = mac .. "|" .. ip .. "|" .. host,
+				disp = disp,
+				mac = mac,
+				ip = ip,
+				host = host,
+			}
 		end
 	end
 	f:close()
@@ -98,16 +104,72 @@ end
 function action_dhcpadd()
 	local http = luci.http
 	local dsp = require "luci.dispatcher"
+	local util = require "luci.util"
 	local uci = require "luci.model.uci".cursor()
 	local want_json = http.formvalue("json") == "1"
 
+	-- Одиночное значение поля (при дубликатах ключей LuCI может вернуть таблицу).
+	local function form1(name)
+		local v = http.formvalue(name)
+		if type(v) == "table" then
+			v = v[#v] or v[1]
+		end
+		return util.trim(tostring(v or ""))
+	end
+
 	if http.getenv("REQUEST_METHOD") == "POST" then
-		local lease = http.formvalue("lease")
 		local ok_add = false
-		if lease and lease ~= "" then
-			local mac, ip, host = lease:match("^([^|]+)|([^|]+)|(.*)$")
-			mac = mac and normalize_mac(mac) or nil
-			if mac and ip and ip:match(ipv4re) then
+		local err = nil
+		local mac, ip, host = nil, nil, ""
+		-- Главный путь: индекс строки из свежего dhcp_leases_list() (без parse ключа и без encodeURIComponent в браузере).
+		local lix = tonumber(form1("woltg_lease_idx"))
+		if lix ~= nil and lix >= 0 then
+			local list = dhcp_leases_list()
+			local L = list[lix + 1]
+			if type(L) == "table" then
+				local m = normalize_mac(tostring(L.mac or ""))
+				local i = util.trim(tostring(L.ip or ""))
+				if m and i ~= "" and i:match(ipv4re) then
+					mac, ip, host = m, i, util.trim(tostring(L.host or ""))
+				end
+			end
+		end
+		-- Не использовать короткие имена mac/ip — возможны коллизии с другими POST-полями LuCI.
+		local fm = form1("woltg_mac")
+		if fm == "" then
+			fm = form1("mac")
+		end
+		local fi = form1("woltg_ip")
+		if fi == "" then
+			fi = form1("ip")
+		end
+		local fh = form1("woltg_host")
+		if fh == "" then
+			fh = form1("host")
+		end
+		if (not mac or not ip) and fm ~= "" and fi ~= "" then
+			local m2 = normalize_mac(fm)
+			if m2 and fi:match(ipv4re) then
+				mac, ip, host = m2, fi, fh
+			end
+		end
+		if not mac or not ip then
+			local lease = form1("lease")
+			local lm, li, lh = lease:match("^([^|]+)|([^|]+)|(.*)$")
+			li = util.trim(li or "")
+			lh = util.trim(lh or "")
+			lm = lm and normalize_mac(util.trim(lm)) or nil
+			if lm and li ~= "" and li:match(ipv4re) then
+				mac, ip, host = lm, li, lh or ""
+			end
+		end
+		if host == "*" then
+			host = ""
+		end
+		if not mac or not ip then
+			err = "no_mac_ip"
+		end
+		if mac and ip and ip:match(ipv4re) then
 				local function eff_cmd_wol(sid)
 					local v = uci:get("woltelegram", sid, "cmd_wol")
 					if type(v) == "string" and v:match("%S") then
@@ -136,6 +198,7 @@ function action_dhcpadd()
 				local sid = uci:add("woltelegram", "device")
 				if not sid then
 					ok_add = false
+					err = "uci_add"
 				else
 					local base = (sid:lower():gsub("[^%w]", "") or "")
 					if base == "" then
@@ -158,25 +221,40 @@ function action_dhcpadd()
 					local ok_t = uci:tset("woltelegram", sid, {
 						enabled = "1",
 						is_default = defv,
-						wol_mac = mac,
-						status_ip = ip,
+						wol_mac = tostring(mac),
+						status_ip = tostring(ip),
 						cmd_wol = w,
 						cmd_status = s_str,
 						label = lab,
 						watch = "0",
 					})
-					if ok_t then
-						uci:set_list("woltelegram", sid, "wol_iface", { "br-lan" })
+					if not ok_t then
+						err = "uci_set"
 					end
-					if ok_t and uci:commit("woltelegram") then
+					local ok_list = true
+					if ok_t then
+						ok_list = uci:set_list("woltelegram", sid, "wol_iface", { "br-lan" })
+						if not ok_list then
+							err = "uci_iface"
+						end
+					end
+					if ok_t and ok_list and uci:commit("woltelegram") then
 						ok_add = true
+						err = nil
+					else
+						if ok_t and ok_list then
+							err = "uci_commit"
+						end
 					end
 				end
-			end
 		end
 		if want_json then
 			http.prepare_content("application/json")
-			http.write_json({ ok = ok_add })
+			if ok_add then
+				http.write_json({ ok = true })
+			else
+				http.write_json({ ok = false, err = err or "unknown" })
+			end
 			return
 		end
 		http.redirect(dsp.build_url("admin", "services", "woltelegram"))

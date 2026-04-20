@@ -47,6 +47,12 @@ m = Map(
 		"#cbi-woltelegram-device .cbi-value-field{flex:1 1 14rem;min-width:0;max-width:100%;padding:.15rem 0;}",
 		"#cbi-woltelegram-device .cbi-dynlist,#cbi-woltelegram-device ul.cbi-dynlist{margin:.15rem 0 .35rem;}",
 		"#cbi-woltelegram-device .cbi-section-create,#cbi-woltelegram-device .cbi-section-actions{margin:.85rem 0 .35rem;}",
+		"#modal_overlay.woltg-dev-mo{position:fixed!important;top:0;left:0;right:0;bottom:0;z-index:14000!important;display:flex!important;align-items:flex-start;justify-content:center;padding:max(8px,2vmin);box-sizing:border-box;overflow-y:auto;overflow-x:hidden;background:rgba(10,11,14,.55);}",
+		"#modal_overlay.woltg-dev-mo .woltg-dev-wrap{width:100%;max-width:min(34rem,calc(100vw - 16px));margin:max(8px,3vh) auto 1.5rem;flex:0 0 auto;}",
+		"#modal_overlay.woltg-dev-mo #woltg-dev-dialog{position:relative;box-sizing:border-box;width:100%;max-height:min(82vh,560px);min-height:5rem;overflow-y:auto;overflow-x:hidden;padding:1rem 1.1rem 1.05rem;border-radius:10px;background:var(--background-color-high,#f4f4f4);color:var(--text-color-high,#222);border:1px solid var(--border-color-medium,rgba(128,128,128,.42));box-shadow:0 16px 48px rgba(0,0,0,.22);}",
+		"#modal_overlay.woltg-dev-mo #woltg-dhcp-list{max-height:min(46vh,280px);overflow:auto;-webkit-overflow-scrolling:touch;margin:.35rem 0 .5rem;padding:.35rem .45rem;border:1px solid rgba(128,128,128,.22);border-radius:6px;background:rgba(128,128,128,.04);}",
+		"#modal_overlay.woltg-dev-mo .cbi-section-table{width:100%;}",
+		"#modal_overlay.woltg-dev-mo .cbi-button-row .btn{min-height:2.35rem;padding:.45rem .75rem;}",
 		"</style>",
 		'<p class="hint" style="margin:0 0 .35rem">«Показать чаты» — только при остановленном боте (конфликт getUpdates).</p>',
 		'<p style="margin:.35rem 0 .2rem;font-weight:600">logread -e woltelegram</p>',
@@ -74,12 +80,13 @@ m = Map(
 		"if(mode==='log'){if(intro)intro.style.display='none';woltgSetMapBodyVisible(false);if(logV){logV.style.display='block';woltgLoadLogs();}if(bLog)bLog.className='btn cbi-button cbi-button-apply';if(bSet)bSet.className='btn cbi-button';}",
 		"else{if(intro)intro.style.display='';woltgSetMapBodyVisible(true);if(logV)logV.style.display='none';if(bLog)bLog.className='btn cbi-button';if(bSet)bSet.className='btn cbi-button cbi-button-apply';}}",
 		"function woltgLoadLogs(){var lr=document.getElementById('woltg-out-logread');var lf=document.getElementById('woltg-out-logfile');if(lr)lr.textContent='Загрузка…';if(lf)lf.textContent='…';",
-		"fetch(L,{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}}).then(function(r){return r.json();}).then(function(j){",
+		"fetch(L,{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}}).then(function(r){return r.text().then(function(tx){if(!r.ok)throw new Error('HTTP '+r.status);var j;try{j=JSON.parse(tx);}catch(e2){throw new Error('Не JSON (войдите в LuCI или обновите страницу).');}return j;});}).then(function(j){",
 		"if(j&&j.ok){if(lr)lr.textContent=j.logread||'';if(lf)lf.textContent=j.logfile||((j.logfile_empty)?'(нет файла — запустите бота.)':'');}",
 		"else{if(lr)lr.textContent='Нет ответа';if(lf)lf.textContent='';}}).catch(function(e){if(lr)lr.textContent=String(e);if(lf)lf.textContent='';});}",
 		"function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\\\"/g,'&quot;');}",
-		"function overlay(){var o=document.getElementById('modal_overlay');if(!o){o=document.createElement('div');o.id='modal_overlay';document.body.appendChild(o);}return o;}",
-		"function closeM(){document.body.classList.remove('modal-overlay-active');var mo=document.getElementById('modal_overlay');if(mo)mo.innerHTML='';}",
+		"function luciCsrf(){var i=document.querySelector('form input[name=\"token\"][type=\"hidden\"]')||document.querySelector('form input[name=\"token\"]');return i?i.value:'';}",
+		"function overlay(){var o=document.getElementById('modal_overlay');if(!o){o=document.createElement('div');o.id='modal_overlay';document.body.appendChild(o);}o.className='woltg-dev-mo';return o;}",
+		"function closeM(){document.body.classList.remove('modal-overlay-active');var mo=document.getElementById('modal_overlay');if(mo){mo.innerHTML='';mo.className='';}}",
 		"function woltgFindDeviceRoot(){var r=document.getElementById('cbi-woltelegram-device');if(r)return r;var els=document.querySelectorAll('[id*=\"woltelegram\"]');for(var i=0;i<els.length;i++){var id=els[i].id||'';if(/(^|-)device($|-)/i.test(id))return els[i];}return null;}",
 		"function woltgFindAddEl(root){if(!root)return null;var w=root.querySelector('.cbi-section-create')||root.querySelector('.cbi-tblsection-actions')||root.querySelector('.cbi-page-actions');if(!w)return null;",
 		"return w.querySelector('a.cbi-button-add')||w.querySelector('input.cbi-button-add')||w.querySelector('button.cbi-button-add')||w.querySelector('a.button-add')||w.querySelector('a[href*=\"addsection\"]')||w.querySelector('a[href*=\"new\"]')||w.querySelector('a');}",
@@ -87,28 +94,31 @@ m = Map(
 		"function woltgDhcpStep1(){var p1=document.getElementById('woltg-dev-pane1');var p2=document.getElementById('woltg-dev-pane2');var ok=document.getElementById('woltg-dev-ok');",
 		"sel=null;if(p1)p1.style.display='';if(p2){p2.style.display='none';p2.innerHTML='';}if(ok){ok.style.display='none';ok.disabled=true;}}",
 		"function woltgOpenDhcpPane(){var p1=document.getElementById('woltg-dev-pane1');var p2=document.getElementById('woltg-dev-pane2');var ok=document.getElementById('woltg-dev-ok');",
-		"if(!p2)return;sel=null;if(p1)p1.style.display='none';p2.style.display='block';",
+		"if(!p2)return;window.__woltgLeases=null;sel=null;if(p1)p1.style.display='none';p2.style.display='block';",
 		"p2.innerHTML='<p style=\"margin:0 0 .5rem\"><button type=\"button\" class=\"btn cbi-button\" id=\"woltg-dev-back\">← Назад</button></p><div id=\"woltg-dhcp-list\"><em>Загрузка…</em></div>';",
 		"var back=document.getElementById('woltg-dev-back');if(back)back.onclick=woltgDhcpStep1;",
 		"if(ok){ok.style.display='';ok.disabled=true;}",
 		"var listEl=document.getElementById('woltg-dhcp-list');",
 		"fetch(G,{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}}).then(function(r){return r.json();}).then(function(j){",
-		"if(!listEl)return;if(!j||!j.ok||!j.leases){listEl.innerHTML='<p class=\"alert-message\">Нет данных.</p>';return;}",
-		"if(!j.leases.length){listEl.innerHTML='<p>Нет <code>/tmp/dhcp.leases</code>.</p>';return;}",
+		"if(!listEl)return;if(!j||!j.ok||!j.leases){window.__woltgLeases=null;listEl.innerHTML='<p class=\"alert-message\">Нет данных.</p>';return;}",
+		"if(!j.leases.length){window.__woltgLeases=null;listEl.innerHTML='<p>Нет <code>/tmp/dhcp.leases</code>.</p>';return;}",
 		"var h=['<p class=\"hint\" style=\"margin:0 0 .4rem\">Выберите аренду:</p>','<table class=\"cbi-section-table\" style=\"width:100%\"><thead><tr><th></th><th>Клиент</th></tr></thead><tbody>'];",
-		"j.leases.forEach(function(L){var k=String(L.key||''),d=esc(L.disp||k);",
-		"h.push('<tr><td style=\"width:2rem\"><input type=\"radio\" name=\"woltg-lease\" value=\"'+esc(k)+'\"/></td><td>'+d+'</td></tr>');});",
-		"h.push('</tbody></table>');listEl.innerHTML=h.join('');",
-		"listEl.querySelectorAll('input[type=radio][name=woltg-lease]').forEach(function(r){r.onchange=function(){sel=r.value;if(ok)ok.disabled=!sel;};});",
-		"}).catch(function(e){if(listEl)listEl.textContent=String(e);});}",
-		"function woltgDhcpSubmit(){if(!sel)return;var listEl=document.getElementById('woltg-dhcp-list');var ok=document.getElementById('woltg-dev-ok');",
+		"j.leases.forEach(function(L,ix){var d=esc(L.disp||L.key||'');",
+		"h.push('<tr><td style=\"width:2rem\"><input type=\"radio\" name=\"woltg-lease\" value=\"'+ix+'\"/></td><td>'+d+'</td></tr>');});",
+		"h.push('</tbody></table>');listEl.innerHTML=h.join('');window.__woltgLeases=j.leases;",
+		"listEl.querySelectorAll('input[type=radio][name=woltg-lease]').forEach(function(r){r.onchange=function(){var v=parseInt(r.value,10);sel=isNaN(v)?null:v;if(ok)ok.disabled=(sel==null);};});",
+		"}).catch(function(e){window.__woltgLeases=null;if(listEl)listEl.textContent=String(e);});}",
+		"function woltgDhcpErr(e){var m={no_mac_ip:'Нет MAC/IP аренды (обновите список).',uci_add:'UCI: не удалось создать секцию.',uci_set:'UCI: запись полей.',uci_iface:'UCI: интерфейсы WOL.',uci_commit:'UCI: сохранение.',unknown:'Неизвестная ошибка.'};return m[e]||e||'Не удалось.';}",
+		"function woltgDhcpSubmit(){if(sel==null||isNaN(sel))return;var listEl=document.getElementById('woltg-dhcp-list');var ok=document.getElementById('woltg-dev-ok');",
 		"if(listEl)listEl.innerHTML='<em>Добавление…</em>';if(ok)ok.disabled=true;",
-		"var fd=new FormData();fd.append('lease',sel);fd.append('json','1');",
-		"fetch(P,{method:'POST',body:fd,credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}}).then(function(r){return r.json();}).then(function(j){",
-		"if(j&&j.ok){closeM();location.reload();}else{if(listEl)listEl.innerHTML='<p class=\"alert-message\">Не удалось.</p>';if(ok)ok.disabled=false;}",
+		"var fd=new FormData();fd.append('json','1');fd.append('woltg_lease_idx',String(sel));",
+		"var cs=luciCsrf();if(cs)fd.append('token',cs);",
+		"var WL=window.__woltgLeases;var W=WL&&WL[sel];if(W){fd.append('lease',String(W.key||''));fd.append('woltg_mac',String(W.mac||''));fd.append('woltg_ip',String(W.ip||''));fd.append('woltg_host',String(W.host||''));}",
+		"fetch(P,{method:'POST',body:fd,credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}}).then(function(r){return r.text().then(function(tx){if(!r.ok)throw new Error('HTTP '+r.status+(tx?': '+tx.substring(0,120):''));var j;try{j=JSON.parse(tx);}catch(e2){throw new Error('Ответ не JSON — обновите страницу или войдите в LuCI.');}return j;});}).then(function(j){",
+		"if(j&&j.ok){closeM();location.reload();}else{if(listEl)listEl.innerHTML='<p class=\"alert-message\">'+esc(woltgDhcpErr(j&&j.err))+'</p>';if(ok)ok.disabled=false;}",
 		"}).catch(function(e){if(listEl)listEl.innerHTML='<p class=\"alert-message\">'+esc(String(e))+'</p>';if(ok)ok.disabled=false;});}",
 		"function openDevModal(){sel=null;var o=overlay();",
-		"o.innerHTML='<div class=\"modal cbi-modal\" role=\"dialog\" aria-modal=\"true\" style=\"position:relative\">'+",
+		"o.innerHTML='<div class=\"woltg-dev-wrap\"><div id=\"woltg-dev-dialog\" class=\"modal cbi-modal\" role=\"dialog\" aria-modal=\"true\" tabindex=\"-1\">'+",
 		"'<button type=\"button\" class=\"btn\" id=\"woltg-dev-x\" style=\"position:absolute;top:.5rem;right:.5rem;z-index:2\" aria-label=\"Close\">×</button>'+",
 		"'<h4 style=\"margin:0 0 .65rem;padding-right:2rem;font-weight:600\">Добавить устройство</h4>'+",
 		"'<div id=\"woltg-dev-pane1\"><p class=\"hint\" style=\"margin:0 0 .5rem\">Выберите способ:</p>'+",
@@ -118,10 +128,10 @@ m = Map(
 		"'<p class=\"hint\" style=\"margin:0;font-size:92%\">Пустая строка — вручную MAC/IP, затем «Сохранить».</p></div>'+",
 		"'<div id=\"woltg-dev-pane2\" style=\"display:none\"></div>'+",
 		"'<div class=\"button-row\" style=\"margin-top:1rem\"><button type=\"button\" class=\"btn cbi-button\" id=\"woltg-dev-cancel\">Закрыть</button>'+",
-		"'<button type=\"button\" class=\"btn cbi-button cbi-button-apply\" id=\"woltg-dev-ok\" style=\"display:none\">Добавить</button></div></div>';",
+		"'<button type=\"button\" class=\"btn cbi-button cbi-button-apply\" id=\"woltg-dev-ok\" style=\"display:none\">Добавить</button></div></div></div>';",
 		"document.body.classList.add('modal-overlay-active');",
 		"o.onclick=function(e){if(e.target===o)closeM();};",
-		"var root=o.querySelector('.modal');if(!root)return;",
+		"var root=o.querySelector('#woltg-dev-dialog');if(!root)return;try{root.focus();}catch(e){}",
 		"root.addEventListener('click',function(e){e.stopPropagation();});",
 		"var cx=root.querySelector('#woltg-dev-cancel');if(cx)cx.onclick=closeM;",
 		"var xx=root.querySelector('#woltg-dev-x');if(xx)xx.onclick=closeM;",
@@ -396,7 +406,7 @@ end
 
 ip = d:option(Value, "status_ip", "IP для ping")
 ip.datatype = "ipaddr"
-ip.optional = false
+ip.optional = true
 ip.rmempty = true
 ip.description = "Ping статуса; пусто — DHCP по MAC."
 function ip.write(self, section, value)
@@ -415,9 +425,12 @@ end
 function ip.validate(self, value)
 	value = util.trim(value or "")
 	if value == "" then
-		return true
+		return ""
 	end
-	return dtypes.ipaddr(value)
+	if not dtypes.ipaddr(value) then
+		return nil
+	end
+	return value
 end
 
 watchf = d:option(Flag, "watch", "Следить")
@@ -426,7 +439,7 @@ watchf.default = "0"
 watchf.description = "После WOL — одно сообщение по ping."
 
 wdelay = d:option(Value, "watch_delay", "Пауза (сек.)")
-wdelay.optional = false
+wdelay.optional = true
 wdelay.rmempty = true
 wdelay.datatype = "uinteger"
 wdelay.placeholder = "5"
@@ -435,13 +448,13 @@ wdelay.description = "Сек. до ping; пусто — 5; макс. 120."
 function wdelay.validate(self, value)
 	value = util.trim(value or "")
 	if value == "" then
-		return true
+		return ""
 	end
 	local n = tonumber(value)
 	if not n or n < 1 or n > 120 then
-		return false
+		return nil
 	end
-	return true
+	return tostring(math.floor(n))
 end
 
 return m
