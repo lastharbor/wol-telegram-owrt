@@ -1,0 +1,7 @@
+bin/*.ipk
+__pycache__/
+*.pyc
+*.swp
+*~
+.DS_Store
+.cursor/

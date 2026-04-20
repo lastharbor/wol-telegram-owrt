@@ -1,0 +1,14 @@
+[Unit]
+Description=Telegram WOL message handler (getUpdates, reply keyboard)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/woltelegram
+Restart=always
+RestartSec=5
+Environment=HOME=/root
+
+[Install]
+WantedBy=multi-user.target

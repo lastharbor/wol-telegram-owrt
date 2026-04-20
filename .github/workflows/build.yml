@@ -1,0 +1,28 @@
+# Проверка сборки .ipk без OpenWrt SDK (как на роутере: tar + gzip).
+name: build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  ipk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build ipk
+        run: |
+          chmod +x build-ipk.sh
+          ./build-ipk.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luci-app-wol-telegram-ipk
+          path: bin/luci-app-wol-telegram_*_all.ipk

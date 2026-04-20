@@ -1,0 +1,27 @@
+# Сборка .ipk и GitHub Release при push тега v* (например v1.0.0).
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build ipk
+        run: |
+          chmod +x build-ipk.sh
+          ./build-ipk.sh
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/luci-app-wol-telegram_*_all.ipk
+          generate_release_notes: true

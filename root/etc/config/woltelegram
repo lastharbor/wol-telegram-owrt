@@ -1,0 +1,21 @@
+# chmod 600 /etc/config/woltelegram
+
+config settings 'main'
+	option enabled '0'
+	option bot_token ''
+	option allowed_chat_ids ''
+	option ping_count '1'
+	option ping_wan '2'
+	option reply_menu '1'
+	option log_max_preset '256'
+	option log_max_kb '256'
+
+config device 'dev1'
+	option enabled '1'
+	option is_default '1'
+	option label 'AntonPC'
+	option wol_mac '60:cf:84:dd:7e:1b'
+	option wol_iface 'br-lan'
+	option status_ip ''
+	option watch '0'
+	option watch_delay '5'
