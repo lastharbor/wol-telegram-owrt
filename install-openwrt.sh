@@ -8,8 +8,32 @@ set -e
 TAG="${1:-v1.0.0}"
 REPO="lastharbor/wol-telegram-owrt"
 
-if ! command -v python3 >/dev/null 2>&1; then
-	echo "Нужен python3 (opkg install python3-light)." >&2
+need_cmd() {
+	command -v "$1" >/dev/null 2>&1
+}
+
+opkg_install_safe() {
+	# opkg install может фейлиться на части пакетов из-за conffiles/конфликтов,
+	# но для инсталлятора важнее дотянуть зависимости насколько возможно.
+	opkg install "$@" >/dev/null 2>&1 || opkg install "$@" || true
+}
+
+if need_cmd opkg; then
+	echo "opkg: обновляю индексы …"
+	opkg update
+	echo "opkg: ставлю базовые зависимости …"
+	# curl для скачивания .ipk, CA для TLS.
+	opkg_install_safe curl ca-bundle
+	# python нужен для GitHub API (urllib+ssl).
+	opkg_install_safe python3-light python3-urllib python3-openssl
+	# pip нужен, чтобы поставить python-telegram-bot вместе с зависимостями (httpx/anyio и т.д.).
+	opkg_install_safe python3-pip || opkg_install_safe py3-pip
+	# утилиты для WOL
+	opkg_install_safe luci-base etherwake
+fi
+
+if ! need_cmd python3; then
+	echo "Нужен python3 (поставьте python3-light через opkg)." >&2
 	exit 1
 fi
 
@@ -70,10 +94,16 @@ curl -fL --connect-timeout 30 --max-time 300 "$URL" -o "$IPK"
 if command -v opkg >/dev/null 2>&1; then
 	echo "Устанавливаю зависимости opkg …"
 	opkg update
-	opkg install luci-base curl etherwake python3-light || true
+	opkg_install_safe luci-base curl ca-bundle etherwake python3-light python3-urllib python3-openssl
+	opkg_install_safe python3-pip || opkg_install_safe py3-pip
 	echo "Устанавливаю пакет …"
 	opkg install --force-reinstall "$IPK" || opkg install "$IPK"
-	echo "Установите при необходимости: pip3 install 'python-telegram-bot>=21,<23'"
+	if command -v pip3 >/dev/null 2>&1; then
+		echo "Ставлю pip-зависимость python-telegram-bot …"
+		pip3 install --no-cache-dir 'python-telegram-bot>=21,<23' || true
+	else
+		echo "pip3 не найден — установите python3-pip и затем: pip3 install 'python-telegram-bot>=21,<23'"
+	fi
 	echo "LuCI: Services → WOL Telegram. Сервис: /etc/init.d/woltelegram restart"
 else
 	echo "opkg не найден — сохранено: $IPK"
